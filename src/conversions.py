@@ -2,6 +2,15 @@ from htmlnode import LeafNode, ParentNode
 from textnode import TextType, TextNode
 import re
 
+def text_to_textnodes(text):
+    nodes = [TextNode(text,TextType.text)]
+    delimiters = {"**":TextType.bold,"*":TextType.italic,"`":TextType.code}
+    for delimiter in delimiters:
+        nodes = split_nodes_delimiter(nodes, delimiter, delimiters[delimiter])
+    nodes = split_nodes_image(nodes)
+    nodes = split_nodes_link(nodes)
+    return nodes
+
 def extract_markdown_images(text):
     images = re.findall(r"\!\[(.*?)\]\((.*?)\)",text)
     return images
@@ -25,6 +34,76 @@ def text_node_to_html_node(text_node):
             return LeafNode("img","",{"src":text_node.url,"alt":text_node.text})
         case _:
             raise Exception("Invalid TextNode")
+def split_nodes_image(old_nodes):
+    new_nodes = []
+    for old_node in old_nodes:
+        if old_node.text_type != TextType.text:
+            new_nodes.append(old_node)
+            continue
+        split_nodes = []
+        images = extract_markdown_images(old_node.text)
+        sections = re.split(r"\!\[.*?\]\(.*?\)",old_node.text)
+        current = 0
+        switch = False
+        if len(sections) > 1:
+            for i in range(len(sections)):
+                if current < len(images):
+                    if sections[i] == '':
+                        split_nodes.append(TextNode(images[current][0],TextType.image,images[current][1]))
+                        current += 1
+                        switch = False
+                    elif switch: 
+                        split_nodes.append(TextNode(images[current][0],TextType.image,images[current][1]))
+                        split_nodes.append(TextNode(sections[i],TextType.text))
+                        current += 1
+                        switch = True
+                    else:
+                        if sections[i] != '':
+                            split_nodes.append(TextNode(sections[i],TextType.text))
+                            switch = True
+                else:
+                    if sections[i] != '':
+                        split_nodes.append(TextNode(sections[i],TextType.text))
+        else:
+            split_nodes = [TextNode(sections[0],TextType.text)]
+        new_nodes.extend(split_nodes)
+    return new_nodes
+def split_nodes_link(old_nodes):
+    new_nodes = []
+    for old_node in old_nodes:
+        if old_node.text_type != TextType.text:
+            new_nodes.append(old_node)
+            continue
+        split_nodes = []
+        links = extract_markdown_links(old_node.text)
+        sections = re.split(r"(?<!\!)\[.*?\]\(.*?\)",old_node.text)
+        current = 0
+        switch = False
+        if len(sections) > 1:
+            for i in range(len(sections)):
+                if current < len(links):
+                    if sections[i] == '':
+                        split_nodes.append(TextNode(links[current][0],TextType.link,links[current][1]))
+                        current += 1
+                        switch = False
+                    elif switch: 
+                        split_nodes.append(TextNode(links[current][0],TextType.link,links[current][1]))
+                        split_nodes.append(TextNode(sections[i],TextType.text))
+                        current += 1
+                        switch = True
+                    else:
+                        if sections[i] != '':
+                            split_nodes.append(TextNode(sections[i],TextType.text))
+                            switch = True
+                else:
+                    if sections[i] != '':
+                        split_nodes.append(TextNode(sections[i],TextType.text))
+        else:
+            split_nodes = [TextNode(sections[0],TextType.text)]
+        new_nodes.extend(split_nodes)
+    return new_nodes
+            
+
 def split_nodes_delimiter(old_nodes, delimiter, text_type):
     new_nodes = []
     for old_node in old_nodes:
